@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #define NEXT        0
 #define PREV        1
@@ -221,6 +222,27 @@ static void bf_gen_ir(struct code_t *c, struct prog_t *p) {
     }
 }
 
+static void bf_dis(struct code_t *c) {
+    for (size_t i = 0; i < c->len; i++) {
+        uint32_t bc  = c->buf[i];
+        uint32_t op  = bc >> OP;
+        uint32_t arg = bc & ARG;
+
+        /* disassemble every bytecode */
+        switch (op) {
+            case NEXT : printf("%08zx : %08x   next $%d\n", i, bc, arg); break;
+            case PREV : printf("%08zx : %08x   prev $%d\n", i, bc, arg); break;
+            case INCR : printf("%08zx : %08x   incr $%d\n", i, bc, arg); break;
+            case DECR : printf("%08zx : %08x   decr $%d\n", i, bc, arg); break;
+            case PUTC : printf("%08zx : %08x   putc $%d\n", i, bc, arg); break;
+            case GETC : printf("%08zx : %08x   getc $%d\n", i, bc, arg); break;
+            case BEQZ : printf("%08zx : %08x   beqz %08lx\n", i, bc, to_i32(arg) + i + 1); break;
+            case BNEZ : printf("%08zx : %08x   bnez %08lx\n", i, bc, to_i32(arg) + i + 1); break;
+            default   : fprintf(stderr, "* fatal: invalid opcode %d.\n", op); abort();
+        }
+    }
+}
+
 static int bf_jit(struct code_t *c) {
     fprintf(stderr, "* error: bf_jit: not implemented.\n");
     return -1;
@@ -233,9 +255,9 @@ static int bf_eval(struct code_t *c) {
 
     /* evaluate every instruction */
     while (pc < c->buf + c->len) {
-        uint32_t iv  = *pc++;
-        uint32_t op  = iv >> OP;
-        uint32_t arg = iv & ARG;
+        uint32_t bc  = *pc++;
+        uint32_t op  = bc >> OP;
+        uint32_t arg = bc & ARG;
 
         /* check memory if needed */
         if (op != NEXT && op != PREV) {
@@ -318,8 +340,8 @@ static int bf_eval(struct code_t *c) {
     return 0;
 }
 
-static int bf_execute(const char *src, int with_jit) {
-    int             ret  = -1;
+static int bf_main(const char *src, int print_ir, int enable_jit) {
+    int             ret  = 0;
     const char *    ptr  = src;
     struct code_t   code = {};
     struct prog_t * prog = bf_parse(src, &ptr);
@@ -342,7 +364,9 @@ static int bf_execute(const char *src, int with_jit) {
     prog_free(prog);
 
     /* select the execution mode */
-    if (with_jit) {
+    if (print_ir) {
+        bf_dis(&code);
+    } else if (enable_jit) {
         ret = bf_jit(&code);
     } else {
         ret = bf_eval(&code);
@@ -354,50 +378,49 @@ static int bf_execute(const char *src, int with_jit) {
 }
 
 static void usage(char *exe) {
-    fprintf(stderr, "usage: %s [-h] [-j] <input-file>\n", exe);
+    fprintf(stderr, "usage: %s [-h] [-j] [-p] <input-file>\n", exe);
     fprintf(stderr, "    -h  this help message\n");
     fprintf(stderr, "    -j  enable JIT compilation\n");
+    fprintf(stderr, "    -p  print compiled IR bytecode\n");
 }
 
 int main(int argc, char **argv) {
-    int    jit  = -1;
-    char * file = NULL;
+    int ch;
+    int print_ir   = 0;
+    int print_help = 0;
+    int enable_jit = 0;
 
-    /* check for command line arguments */
-    if (argc <= 1) {
-        fprintf(stderr, "* error: missing input file.\n");
-        return 1;
+    /* parse command line options */
+    while ((ch = getopt(argc, argv, "h::j::p::")) != -1) {
+        switch (ch) {
+            case 'p' : print_ir = 1; break;
+            case 'h' : print_help = 1; break;
+            case 'j' : enable_jit = 1; break;
+            case '?' : return 1;
+            default  : fprintf(stderr, "* fatal: invalid return value of getopt().\n"); abort();
+        }
     }
 
     /* check for help */
-    if (!strcmp(argv[1], "-h")) {
+    if (print_help) {
         usage(argv[0]);
         return 0;
     }
 
-    /* parse the arguments */
-    if (*argv[1] != '-') {
-        if (argc == 2) {
-            jit = 0;
-            file = argv[1];
-        }
-    } else if (!strcmp(argv[1], "-j")) {
-        if (argc == 3) {
-            jit = 1;
-            file = argv[2];
-        }
-    }
-
-    /* check if the command line options are valid */
-    if (!file || jit == -1) {
-        fprintf(stderr, "* error: invalid command line options.\n");
-        usage(argv[0]);
+    /* get the source file name */
+    if (optind >= argc) {
+        fprintf(stderr, "* error: missing input file.\n");
+        return 1;
+    } else if (optind < argc - 1) {
+        fprintf(stderr, "* error: multiple input files.\n");
         return 1;
     }
 
     /* open the source file */
-    FILE *fp = fopen(file, "r");
-    long size;
+    FILE * fp = fopen(argv[optind], "r");
+    long   size;
+
+    /* check for errors */
     if (!fp) {
         fprintf(stderr, "* error: cannot open file: [%d] %s\n", errno, strerror(errno));
         return 1;
@@ -422,7 +445,7 @@ int main(int argc, char **argv) {
     }
 
     /* execute the program */
-    int ret = bf_execute(buf, jit);
+    int ret = bf_main(buf, print_ir, enable_jit);
     free(buf);
     fclose(fp);
     return ret;
