@@ -10,6 +10,7 @@
             "request": "launch",
             "program": "${workspaceRoot}/bfi",
             "args": [
+                "-j",
                 "example/helloworld.bf"
             ],
             "stopAtEntry": false,
