@@ -795,7 +795,7 @@ static void usage(char *exe) {
     fprintf(stderr, "usage: %s [-h] [-j] [-p] <input-file>\n", exe);
     fprintf(stderr, "    -h  this help message\n");
     fprintf(stderr, "    -j  enable JIT compilation\n");
-    fprintf(stderr, "    -p  print compiled IR bytecode\n");
+    fprintf(stderr, "    -p  print compiled bytecode IR\n");
 }
 
 int main(int argc, char **argv) {
