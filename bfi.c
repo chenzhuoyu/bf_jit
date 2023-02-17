@@ -315,16 +315,16 @@ static void func_long(struct func_t *fn, uint32_t ins) {
 static void func_ld64(struct func_t *fn, uint8_t reg, uint64_t imm) {
 #if __x86_64__
     if (imm > UINT32_MAX) {
-        func_byte(0x48 | ((reg >> 3) & 1));                             // movabsq  ...., ....
-        func_byte(fn, 0xb8 | (reg & 3));                                //                %reg
+        func_byte(fn, 0x48 | ((reg >> 3) & 1));                         // movabsq  ...., ....
+        func_byte(fn, 0xb8 | (reg & 7));                                //                %reg
         func_emit(fn, &imm, 8);                                         //          $imm
     } else if (reg >= 8) {
         func_byte(fn, 0x41);                                            // movl     ...., ....
-        func_byte(fn, 0xb8 | (reg & 3));                                //                %reg
-        func_long(imm);                                                 //          $imm
+        func_byte(fn, 0xb8 | (reg & 7));                                //                %reg
+        func_long(fn, imm);                                             //          $imm
     } else {
-        func_byte(fn, 0xb8 | (reg & 3));                                // movl     ...., %reg
-        func_long(imm);                                                 //          $imm
+        func_byte(fn, 0xb8 | (reg & 7));                                // movl     ...., %reg
+        func_long(fn, imm);                                             //          $imm
     }
 #elif __aarch64__
     for (int i = 0, k = 0, v; i < 4; i++) {
