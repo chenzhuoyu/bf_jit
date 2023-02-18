@@ -342,22 +342,19 @@ static void func_prologue(struct func_t *fn) {
 #if __x86_64__
     func_emit(fn, "\x55", 1);                                       // pushq    %rbp
     func_emit(fn, "\x48\x89\xe5", 3);                               // movq     %rsp, %rbp
-    func_emit(fn, "\x41\x54", 2);                                   // pushq    %r12
     func_emit(fn, "\x41\x55", 2);                                   // pushq    %r13
     func_emit(fn, "\x41\x56", 2);                                   // pushq    %r14
     func_emit(fn, "\x41\x57", 2);                                   // pushq    %r15
-    func_ld64(fn, 12, (uint64_t)&putchar_unlocked);                 // movabsq  &putchar_unlocked, %r12
-    func_ld64(fn, 13, (uint64_t)&getchar_unlocked);                 // movabsq  &getchar_unlocked, %r13
-    func_emit(fn, "\x49\x89\xfe", 3);                               // movq     %rdi, %r14
+    func_ld64(fn, 13, (uint64_t)&putchar_unlocked);                 // movabsq  &putchar_unlocked, %r13
+    func_ld64(fn, 14, (uint64_t)&getchar_unlocked);                 // movabsq  &getchar_unlocked, %r14
     func_emit(fn, "\x49\x89\xff", 3);                               // movq     %rdi, %r15
 #elif __aarch64__
     func_long(fn, 0xa9bd7bfd);                                      // stp      fp, lr, [sp, #-0x30]!
     func_long(fn, 0xa90273fb);                                      // stp      x27, x28, [sp, #0x20]
-    func_long(fn, 0xa9016bf9);                                      // stp      x25, x26, [sp, #0x10]
+    func_long(fn, 0xf9000ffa);                                      // str      x26, [sp, #0x18]
     func_long(fn, 0x910003fd);                                      // mov      fp, sp
-    func_ld64(fn, 25, (uint64_t)&putchar_unlocked);                 // movl     x25, &putchar_unlocked
-    func_ld64(fn, 26, (uint64_t)&getchar_unlocked);                 // movl     x26, &getchar_unlocked
-    func_long(fn, 0xaa0003fb);                                      // mov      x27, x0
+    func_ld64(fn, 26, (uint64_t)&putchar_unlocked);                 // movl     x26, &putchar_unlocked
+    func_ld64(fn, 27, (uint64_t)&getchar_unlocked);                 // movl     x27, &getchar_unlocked
     func_long(fn, 0xaa0003fc);                                      // mov      x28, x0
 #else
 #error "Unsupported CPU architecture"
@@ -369,11 +366,10 @@ static void func_epilogue(struct func_t *fn) {
     func_emit(fn, "\x41\x5f", 2);                                   // popq     %r15
     func_emit(fn, "\x41\x5e", 2);                                   // popq     %r14
     func_emit(fn, "\x41\x5d", 2);                                   // popq     %r13
-    func_emit(fn, "\x41\x5c", 2);                                   // popq     %r12
     func_emit(fn, "\x5d", 1);                                       // popq     %rbp
     func_emit(fn, "\xc3", 1);                                       // ret
 #elif __aarch64__
-    func_long(fn, 0xa9416bf9);                                      // ldp      x25, x26, [sp, #0x10]
+    func_long(fn, 0xf9400ffa);                                      // ldr      x26, [sp, #0x18]
     func_long(fn, 0xa94273fb);                                      // ldp      x27, x28, [sp, #0x20]
     func_long(fn, 0xa8c37bfd);                                      // ldp      fp, lr, [sp], #0x30
     func_long(fn, 0xd65f03c0);                                      // ret
@@ -494,12 +490,12 @@ static void func_inst_putc(struct func_t *fn, uint32_t n) {
 #if __x86_64__
     while (n--) {
         func_emit(fn, "\x49\x0f\xb6\x3f", 4);                       // movzbq   (%r15), %rdi
-        func_emit(fn, "\x41\xff\xd4", 3);                           // callq    %r12
+        func_emit(fn, "\x41\xff\xd5", 3);                           // callq    %r13
     }
 #elif __aarch64__
     while (n--) {
         func_long(fn, 0x39400380);                                  // ldrb     w0, [x28]
-        func_long(fn, 0xd63f0320);                                  // blr      x25
+        func_long(fn, 0xd63f0340);                                  // blr      x26
     }
 #else
 #error "Unsupported CPU architecture"
@@ -508,11 +504,11 @@ static void func_inst_putc(struct func_t *fn, uint32_t n) {
 
 static void func_inst_getc(struct func_t *fn, uint32_t n) {
 #if __x86_64__
-    while (n--) func_emit(fn, "\x41\xff\xd5", 3);                   // callq    %r13 * n
+    while (n--) func_emit(fn, "\x41\xff\xd6", 3);                   // callq    %r14 * n
     func_emit(fn, "\x0f\xb6\xc0", 3);                               // movzbl   %al, %eax
     func_emit(fn, "\x49\x89\x07", 3);                               // movq     %rax, (%r15)
 #elif __aarch64__
-    while (n--) func_long(fn, 0xd63f0340);                          // blr      x26 * n
+    while (n--) func_long(fn, 0xd63f0360);                          // blr      x27 * n
     func_long(fn, 0x92401c00);                                      // and      x0, x0, #0xff
     func_long(fn, 0xf9000380);                                      // str      x0, [x28]
 #else
