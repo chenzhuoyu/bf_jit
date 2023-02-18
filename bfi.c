@@ -253,6 +253,17 @@ static void bf_dis(struct code_t *c) {
     }
 }
 
+/** I/O Functions **/
+
+static void io_putc(cell_t *cell) {
+    putchar(*cell & 0xff);
+}
+
+static void io_getc(cell_t *cell) {
+    int ch;
+    if ((ch = getchar()) != EOF) *cell = ch;
+}
+
 /** JIT Compiler **/
 
 struct func_t {
@@ -345,16 +356,16 @@ static void func_prologue(struct func_t *fn) {
     func_emit(fn, "\x41\x55", 2);                                   // pushq    %r13
     func_emit(fn, "\x41\x56", 2);                                   // pushq    %r14
     func_emit(fn, "\x41\x57", 2);                                   // pushq    %r15
-    func_ld64(fn, 13, (uint64_t)&putchar_unlocked);                 // movabsq  &putchar_unlocked, %r13
-    func_ld64(fn, 14, (uint64_t)&getchar_unlocked);                 // movabsq  &getchar_unlocked, %r14
+    func_ld64(fn, 13, (uint64_t)&io_putc);                          // movabsq  &io_putc, %r13
+    func_ld64(fn, 14, (uint64_t)&io_getc);                          // movabsq  &io_getc, %r14
     func_emit(fn, "\x49\x89\xff", 3);                               // movq     %rdi, %r15
 #elif __aarch64__
     func_long(fn, 0xa9bd7bfd);                                      // stp      fp, lr, [sp, #-0x30]!
     func_long(fn, 0xa90273fb);                                      // stp      x27, x28, [sp, #0x20]
     func_long(fn, 0xf9000ffa);                                      // str      x26, [sp, #0x18]
     func_long(fn, 0x910003fd);                                      // mov      fp, sp
-    func_ld64(fn, 26, (uint64_t)&putchar_unlocked);                 // movl     x26, &putchar_unlocked
-    func_ld64(fn, 27, (uint64_t)&getchar_unlocked);                 // movl     x27, &getchar_unlocked
+    func_ld64(fn, 26, (uint64_t)&io_putc);                          // movl     x26, &io_putc
+    func_ld64(fn, 27, (uint64_t)&io_getc);                          // movl     x27, &io_getc
     func_long(fn, 0xaa0003fc);                                      // mov      x28, x0
 #else
 #error "Unsupported CPU architecture"
@@ -489,12 +500,12 @@ static void func_inst_decr(struct func_t *fn, uint32_t n) {
 static void func_inst_putc(struct func_t *fn, uint32_t n) {
 #if __x86_64__
     while (n--) {
-        func_emit(fn, "\x49\x0f\xb6\x3f", 4);                       // movzbq   (%r15), %rdi
+        func_emit(fn, "\x4c\x89\xff", 3);                           // movq     %r15, %rdi
         func_emit(fn, "\x41\xff\xd5", 3);                           // callq    %r13
     }
 #elif __aarch64__
     while (n--) {
-        func_long(fn, 0x39400380);                                  // ldrb     w0, [x28]
+        func_long(fn, 0xaa1c03e0);                                  // mov      x0, x28
         func_long(fn, 0xd63f0340);                                  // blr      x26
     }
 #else
@@ -504,13 +515,15 @@ static void func_inst_putc(struct func_t *fn, uint32_t n) {
 
 static void func_inst_getc(struct func_t *fn, uint32_t n) {
 #if __x86_64__
-    while (n--) func_emit(fn, "\x41\xff\xd6", 3);                   // callq    %r14 * n
-    func_emit(fn, "\x0f\xb6\xc0", 3);                               // movzbl   %al, %eax
-    func_emit(fn, "\x49\x89\x07", 3);                               // movq     %rax, (%r15)
+    while (n--) {
+        func_emit(fn, "\x4c\x89\xff", 3);                           // movq     %r15, %rdi
+        func_emit(fn, "\x41\xff\xd6", 3);                           // callq    %r14
+    }
 #elif __aarch64__
-    while (n--) func_long(fn, 0xd63f0360);                          // blr      x27 * n
-    func_long(fn, 0x92401c00);                                      // and      x0, x0, #0xff
-    func_long(fn, 0xf9000380);                                      // str      x0, [x28]
+    while (n--) {
+        func_long(fn, 0xaa1c03e0);                                  // mov      x0, x28
+        func_long(fn, 0xd63f0360);                                  // blr      x27
+    }
 #else
 #error "Unsupported CPU architecture"
 #endif
@@ -697,13 +710,13 @@ static int bf_eval(struct code_t *c) {
 
             /* print the current cell as character */
             case PUTC: {
-                while (arg--) putchar_unlocked(*dp);
+                while (arg--) io_putc(dp);
                 break;
             }
 
             /* read one character from input, and put into the current cell */
             case GETC: {
-                while (arg--) *dp = getchar();
+                while (arg--) io_getc(dp);
                 break;
             }
 
