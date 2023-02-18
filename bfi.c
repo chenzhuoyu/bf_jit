@@ -577,7 +577,6 @@ static int bf_jit(struct code_t *c) {
     struct func_t fn;
     uint32_t      op;
     uint32_t      arg;
-    int           ret   = -1;
     void *        mem   = calloc(MAX_MEM, sizeof(cell_t));
     uint32_t *    brtab = malloc(c->len * sizeof(uint32_t));
     uint32_t *    pctab = malloc((c->len + 1) * sizeof(uint32_t));
@@ -600,7 +599,7 @@ static int bf_jit(struct code_t *c) {
         switch (op) {
             default: {
                 fprintf(stderr, "* fatal: invalid opcode %d.\n", op);
-                goto exception;
+                abort();
             }
 
             /* basic instructions */
@@ -619,8 +618,8 @@ static int bf_jit(struct code_t *c) {
 
                 /* check for branch target */
                 if (dest < 0 || dest > c->len) {
-                    fprintf(stderr, "* error: branch out of bounds: %zd\n", dest);
-                    goto exception;
+                    fprintf(stderr, "* fatal: branch out of bounds: %zd\n", dest);
+                    abort();
                 }
 
                 /* emit the instruction */
@@ -649,14 +648,11 @@ static int bf_jit(struct code_t *c) {
     }
 
     /* execute the function */
-    ret = 0;
     func_exec(&fn, mem);
-
-exception:
     free(mem);
     free(brtab);
     free(pctab);
-    return ret;
+    return 0;
 }
 
 /** Interpreter **/
@@ -671,15 +667,6 @@ static int bf_eval(struct code_t *c) {
         uint32_t bc  = *pc++;
         uint32_t op  = bc >> OP;
         uint32_t arg = bc & ARG;
-
-        /* check memory if needed */
-        if (op != NEXT && op != PREV) {
-            if (__builtin_expect(dp < mm || dp >= mm + MAX_MEM, 0)) {
-                free(mm);
-                fprintf(stderr, "* error: memory access out of bounds: %zd\n", dp - mm);
-                return -1;
-            }
-        }
 
         /* main switch on opcode */
         switch (op) {
@@ -734,15 +721,6 @@ static int bf_eval(struct code_t *c) {
             case BNEZ: {
                 if (*dp != 0) pc += to_int(arg);
                 break;
-            }
-        }
-
-        /* check PC if needed */
-        if (op == BEQZ || op == BNEZ) {
-            if (__builtin_expect(pc < c->buf || pc > c->buf + c->len, 0)) {
-                free(mm);
-                fprintf(stderr, "* error: branch out of bounds: %zd\n", pc - c->buf);
-                return -1;
             }
         }
     }
@@ -855,7 +833,7 @@ int main(int argc, char **argv) {
     char *buf = malloc(size + 1);
     memset(buf, 0, size + 1);
 
-    /* read then close the source file */
+    /* read the source file */
     if (fread(buf, 1, size, fp) != size) {
         fclose(fp);
         fprintf(stderr, "* error: cannot read program.\n");
