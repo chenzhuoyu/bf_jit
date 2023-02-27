@@ -2,7 +2,7 @@ TARGET	= bfi
 OBJECTS	= bfi.o
 
 CFLAGS	= -O3 -Wall -fPIC
-LDFLAGS	= -flto
+LDFLAGS	=
 
 .PHONY: all clean
 
